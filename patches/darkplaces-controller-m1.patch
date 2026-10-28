@@ -1,0 +1,389 @@
+diff --git a/darkplaces-sdl2-vs2019.vcxproj b/darkplaces-sdl2-vs2019.vcxproj
+index f68f7c973d563d0aca1db702b608584758db90e3..64d758bcc13569d735dd1d631abe750f56db9908 100644
+--- a/darkplaces-sdl2-vs2019.vcxproj
++++ b/darkplaces-sdl2-vs2019.vcxproj
+@@ -304,6 +304,7 @@
+     <ClCompile Include="taskqueue.c" />
+     <ClCompile Include="thread_sdl.c" />
+     <ClCompile Include="utf8lib.c" />
++    <ClCompile Include="joy_sdl.c" />
+     <ClCompile Include="vid_sdl.c" />
+     <ClCompile Include="vid_shared.c" />
+     <ClCompile Include="view.c" />
+@@ -424,6 +425,7 @@
+     <ClInclude Include="thread.h" />
+     <ClInclude Include="timing.h" />
+     <ClInclude Include="utf8lib.h" />
++    <ClInclude Include="joy_sdl.h" />
+     <ClInclude Include="vid.h" />
+     <ClInclude Include="view.h" />
+     <ClInclude Include="convex.h" />
+diff --git a/joy_sdl.c b/joy_sdl.c
+new file mode 100644
+index 0000000000000000000000000000000000000000..faa46558b8194476491eef154843753128fd26ca
+--- /dev/null
++++ b/joy_sdl.c
+@@ -0,0 +1,101 @@
++/* SDL-only controller ownership and polling. GPL-2.0-or-later. */
++#include "joy_sdl.h"
++
++void JoySDL_Close(joy_sdl_device_t *device)
++{
++	/* A controller owns its underlying joystick: never close both handles. */
++	if (device->controller)
++		SDL_GameControllerClose(device->controller);
++	else if (device->joystick)
++		SDL_JoystickClose(device->joystick);
++
++	device->controller = NULL;
++	device->joystick = NULL;
++	device->instance = -1;
++}
++
++SDL_bool JoySDL_Select(joy_sdl_device_t *device, int index)
++{
++	SDL_JoystickID instance = index >= 0 && index < SDL_NumJoysticks()
++		? SDL_JoystickGetDeviceInstanceID(index) : -1;
++	if (device->joystick && SDL_JoystickGetAttached(device->joystick)
++		&& instance == device->instance)
++		return SDL_FALSE;
++	if (!device->joystick && instance < 0)
++		return SDL_FALSE;
++
++	JoySDL_Close(device);
++	if (instance >= 0)
++	{
++		if (SDL_IsGameController(index))
++		{
++			device->controller = SDL_GameControllerOpen(index);
++			if (device->controller)
++				device->joystick = SDL_GameControllerGetJoystick(device->controller);
++		}
++		else
++			device->joystick = SDL_JoystickOpen(index);
++		if (device->joystick)
++			device->instance = SDL_JoystickInstanceID(device->joystick);
++	}
++	return SDL_TRUE;
++}
++
++static float JoySDL_Axis(Sint16 value)
++{
++	/* Both endpoints must normalize exactly, including -32768. */
++	return value < 0 ? value / 32768.0f : value / 32767.0f;
++}
++
++void JoySDL_Poll(const joy_sdl_device_t *device, joy_sdl_state_t *state, float trigger_deadzone)
++{
++	int j, count;
++	SDL_zero(*state);
++	/* A removal can arrive after selection but before this frame's poll.
++	 * Keep the old layout on the zero state so held X360 keys are released
++	 * as X360 keys, not accidentally as generic JOY/AUX keys. */
++	state->mapped = device->controller ? SDL_TRUE : SDL_FALSE;
++	if (!device->joystick || !SDL_JoystickGetAttached(device->joystick))
++		return;
++	if (device->controller)
++	{
++		/* Fixed X360_* logical order, independent of SDL enum sizes/versions. */
++		static const SDL_GameControllerButton buttons[] = {
++			SDL_CONTROLLER_BUTTON_DPAD_UP, SDL_CONTROLLER_BUTTON_DPAD_DOWN,
++			SDL_CONTROLLER_BUTTON_DPAD_LEFT, SDL_CONTROLLER_BUTTON_DPAD_RIGHT,
++			SDL_CONTROLLER_BUTTON_START, SDL_CONTROLLER_BUTTON_BACK,
++			SDL_CONTROLLER_BUTTON_LEFTSTICK, SDL_CONTROLLER_BUTTON_RIGHTSTICK,
++			SDL_CONTROLLER_BUTTON_LEFTSHOULDER, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER,
++			SDL_CONTROLLER_BUTTON_A, SDL_CONTROLLER_BUTTON_B,
++			SDL_CONTROLLER_BUTTON_X, SDL_CONTROLLER_BUTTON_Y
++		};
++		for (j = 0; j < SDL_CONTROLLER_AXIS_MAX && j < 6 && j < JOY_SDL_AXES; ++j)
++			state->axis[j] = JoySDL_Axis(SDL_GameControllerGetAxis(device->controller, (SDL_GameControllerAxis)j));
++		/* XInput-compatible stick coordinates: positive Y points up. */
++		state->axis[1] = -state->axis[1];
++		state->axis[3] = -state->axis[3];
++		for (j = 0; j < (int)SDL_arraysize(buttons); ++j)
++			state->button[j] = SDL_GameControllerGetButton(device->controller, buttons[j]);
++		trigger_deadzone = SDL_clamp(trigger_deadzone, 0.0f, 1.0f);
++		/* Keep both analog axes; digital firing is a separate threshold. */
++		state->button[14] = state->axis[4] > trigger_deadzone;
++		state->button[15] = state->axis[5] > trigger_deadzone;
++		state->button[16] = state->axis[1] < -0.5f;
++		state->button[17] = state->axis[1] >  0.5f;
++		state->button[18] = state->axis[0] < -0.5f;
++		state->button[19] = state->axis[0] >  0.5f;
++		state->button[20] = state->axis[3] < -0.5f;
++		state->button[21] = state->axis[3] >  0.5f;
++		state->button[22] = state->axis[2] < -0.5f;
++		state->button[23] = state->axis[2] >  0.5f;
++	}
++	else
++	{
++		count = SDL_JoystickNumAxes(device->joystick);
++		for (j = 0; j < count && j < JOY_SDL_AXES; ++j)
++			state->axis[j] = JoySDL_Axis(SDL_JoystickGetAxis(device->joystick, j));
++		count = SDL_JoystickNumButtons(device->joystick);
++		for (j = 0; j < count && j < JOY_SDL_BUTTONS; ++j)
++			state->button[j] = SDL_JoystickGetButton(device->joystick, j);
++	}
++}
+diff --git a/joy_sdl.h b/joy_sdl.h
+new file mode 100644
+index 0000000000000000000000000000000000000000..06168f2381796cb06a7a3a14fd5aebf006334dae
+--- /dev/null
++++ b/joy_sdl.h
+@@ -0,0 +1,27 @@
++/* SDL-only controller ownership and polling. GPL-2.0-or-later. */
++#ifndef JOY_SDL_H
++#define JOY_SDL_H
++#include <SDL.h>
++
++#define JOY_SDL_AXES 16
++#define JOY_SDL_BUTTONS 36
++
++typedef struct joy_sdl_device_s
++{
++	SDL_Joystick *joystick;
++	SDL_GameController *controller;
++	SDL_JoystickID instance;
++} joy_sdl_device_t;
++
++typedef struct joy_sdl_state_s
++{
++	float axis[JOY_SDL_AXES];
++	unsigned char button[JOY_SDL_BUTTONS];
++	SDL_bool mapped;
++} joy_sdl_state_t;
++
++/* Returns true whenever ownership changes, including disconnect/disable. */
++SDL_bool JoySDL_Select(joy_sdl_device_t *device, int index);
++void JoySDL_Close(joy_sdl_device_t *device);
++void JoySDL_Poll(const joy_sdl_device_t *device, joy_sdl_state_t *state, float trigger_deadzone);
++#endif
+diff --git a/makefile.inc b/makefile.inc
+index 9cfed413ec5fe295ed0054564e0c54bb1d470be5..ac63688756f1035fc0460e3af0ce318e65d11241 100644
+--- a/makefile.inc
++++ b/makefile.inc
+@@ -127,7 +127,7 @@ OBJ_MENU= \
+ # being linked, because it should be recompiled every time an executable is
+ # built to give the executable a proper date string
+ OBJ_SV= builddate.c sys_null.o vid_null.o thread_null.o $(OBJ_SND_NULL) $(OBJ_COMMON)
+-OBJ_SDL= builddate.c sys_sdl.o vid_sdl.o thread_sdl.o $(OBJ_MENU) $(OBJ_SND_COMMON) $(OBJ_SND_XMP) snd_sdl.o $(OBJ_VIDEO_CAPTURE) $(OBJ_COMMON)
++OBJ_SDL= builddate.c sys_sdl.o joy_sdl.o vid_sdl.o thread_sdl.o $(OBJ_MENU) $(OBJ_SND_COMMON) $(OBJ_SND_XMP) snd_sdl.o $(OBJ_VIDEO_CAPTURE) $(OBJ_COMMON)
+ OBJ_WASM= builddate.c sys_wasm.o vid_sdl.o thread_sdl.o $(OBJ_MENU) $(OBJ_SND_COMMON) $(OBJ_SND_XMP) snd_sdl.o $(OBJ_VIDEO_CAPTURE) $(OBJ_COMMON)
+ 
+ # Compilation
+diff --git a/vid.h b/vid.h
+index f1d57ab6e842769913bb3da424ff817a0af2cc61..21268e0e3168f45cc20db1e031d16e7e5df572e5 100644
+--- a/vid.h
++++ b/vid.h
+@@ -103,7 +103,7 @@ typedef struct vid_joystate_s
+ {
+ 	float axis[MAXJOYAXIS]; ///< -1 to +1
+ 	unsigned char button[MAXJOYBUTTON]; ///< 0 or 1
+-	qbool is360; ///< indicates this joystick is a Microsoft Xbox 360 Controller For Windows
++	qbool is360; ///< standardized X360 logical layout (SDL GameController or native XInput)
+ }
+ vid_joystate_t;
+ 
+@@ -116,6 +116,7 @@ extern cvar_t joy_active;
+ 
+ float VID_JoyState_GetAxis(const vid_joystate_t *joystate, int axis, float sensitivity, float deadzone);
+ void VID_ApplyJoyState(vid_joystate_t *joystate);
++void VID_ReleaseJoyState(void);
+ void VID_BuildJoyState(vid_joystate_t *joystate);
+ void VID_Shared_BuildJoyState_Begin(vid_joystate_t *joystate);
+ void VID_Shared_BuildJoyState_Finish(vid_joystate_t *joystate);
+diff --git a/vid_sdl.c b/vid_sdl.c
+index ea6fe26e0f900d626b686ac226442fd69d7d4385..74f4e41c9eb30947cc701367b3d0db620272440b 100644
+--- a/vid_sdl.c
++++ b/vid_sdl.c
+@@ -23,6 +23,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+ #include "quakedef.h"
+ #include "image.h"
+ #include "utf8lib.h"
++#include "joy_sdl.h"
++
++#if MAXJOYAXIS != JOY_SDL_AXES || MAXJOYBUTTON != JOY_SDL_BUTTONS
++#error SDL joystick state sizes must match vid_joystate_t
++#endif
+ 
+ #ifndef __IPHONEOS__
+ #ifdef MACOSX
+@@ -70,8 +75,7 @@ static qbool vid_usingmouse_relativeworks = false; // SDL2 workaround for unimpl
+ static qbool vid_usinghidecursor = false;
+ static qbool vid_hasfocus = false;
+ static qbool vid_wmborder_waiting, vid_wmborderless;
+-static SDL_Joystick *vid_sdljoystick = NULL;
+-static SDL_GameController *vid_sdlgamecontroller = NULL;
++static joy_sdl_device_t vid_sdljoy = {NULL, NULL, -1};
+ static cvar_t joy_sdl2_trigger_deadzone = {CF_ARCHIVE | CF_CLIENT, "joy_sdl2_trigger_deadzone", "0.5", "deadzone for triggers to be registered as key presses"};
+ // GAME_STEELSTORM specific
+ static cvar_t *steelstorm_showing_map = NULL; // detect but do not create the cvar
+@@ -682,43 +686,17 @@ static void VID_TouchscreenCursor(float px, float py, float pwidth, float pheigh
+ 
+ void VID_BuildJoyState(vid_joystate_t *joystate)
+ {
+-	VID_Shared_BuildJoyState_Begin(joystate);
+-
+-	if (vid_sdljoystick)
+-	{
+-		SDL_Joystick *joy = vid_sdljoystick;
+-		int j;
+-
+-		if (vid_sdlgamecontroller)
+-		{
+-			for (j = 0; j <= SDL_CONTROLLER_AXIS_MAX; ++j)
+-			{
+-				joystate->axis[j] = SDL_GameControllerGetAxis(vid_sdlgamecontroller, (SDL_GameControllerAxis)j) * (1.0f / 32767.0f);
+-			}
+-			for (j = 0; j < SDL_CONTROLLER_BUTTON_MAX; ++j)
+-				joystate->button[j] = SDL_GameControllerGetButton(vid_sdlgamecontroller, (SDL_GameControllerButton)j);
+-			// emulate joy buttons for trigger "axes"
+-			joystate->button[SDL_CONTROLLER_BUTTON_MAX] = VID_JoyState_GetAxis(joystate, SDL_CONTROLLER_AXIS_TRIGGERLEFT, 1, joy_sdl2_trigger_deadzone.value) > 0.0f;
+-			joystate->button[SDL_CONTROLLER_BUTTON_MAX+1] = VID_JoyState_GetAxis(joystate, SDL_CONTROLLER_AXIS_TRIGGERRIGHT, 1, joy_sdl2_trigger_deadzone.value) > 0.0f;
+-		}
+-		else
+-
+-		{
+-			int numaxes;
+-			int numbuttons;
+-			numaxes = SDL_JoystickNumAxes(joy);
+-			for (j = 0;j < numaxes;j++)
+-				joystate->axis[j] = SDL_JoystickGetAxis(joy, j) * (1.0f / 32767.0f);
+-			numbuttons = SDL_JoystickNumButtons(joy);
+-			for (j = 0;j < numbuttons;j++)
+-				joystate->button[j] = SDL_JoystickGetButton(joy, j);
+-		}
+-	}
+-
++	joy_sdl_state_t state;
++	/* SDL owns all input in this backend. Never merge native XInput state:
++	 * SDL may itself use XInput/HIDAPI for this very same physical device. */
++	memset(joystate, 0, sizeof(*joystate));
++	JoySDL_Poll(&vid_sdljoy, &state, joy_sdl2_trigger_deadzone.value);
++	memcpy(joystate->axis, state.axis, sizeof(state.axis));
++	memcpy(joystate->button, state.button, sizeof(state.button));
++	joystate->is360 = state.mapped;
+ 	VID_Shared_BuildJoyState_Finish(joystate);
+ }
+ 
+-// clear every touch screen area, except the one with button[skip]
+ #define Vid_ClearAllTouchscreenAreas(skip) \
+ 	if (skip != 0) \
+ 		VID_TouchscreenCursor(0, 0, 0, 0, &buttons[0], K_MOUSE1); \
+@@ -1569,8 +1547,8 @@ void VID_Init (void)
+ 
+ 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
+ 		Sys_Error ("Failed to init SDL video subsystem: %s", SDL_GetError());
+-	if (SDL_InitSubSystem(SDL_INIT_JOYSTICK) < 0)
+-		Con_Printf(CON_ERROR "Failed to init SDL joystick subsystem: %s\n", SDL_GetError());
++	if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) < 0)
++		Con_Printf(CON_ERROR "Failed to init SDL game controller subsystem: %s\n", SDL_GetError());
+ 
+ 	SDL_GetVersion(&version);
+ 	Con_Printf("Linked against SDL version %d.%d.%d\n"
+@@ -1579,67 +1557,27 @@ void VID_Init (void)
+ 	           version.major, version.minor, version.patch);
+ }
+ 
+-static int vid_sdljoystickindex = -1;
+ void VID_EnableJoystick(qbool enable)
+ {
+-	int index = joy_enable.integer > 0 ? joy_index.integer : -1;
+-	int numsdljoysticks;
+-	qbool success = false;
+-	int sharedcount = 0;
+-	int sdlindex = -1;
+-	sharedcount = VID_Shared_SetJoystick(index);
+-	if (index >= 0 && index < sharedcount)
+-		success = true;
+-	sdlindex = index - sharedcount;
+-
+-	numsdljoysticks = SDL_NumJoysticks();
+-	if (sdlindex < 0 || sdlindex >= numsdljoysticks)
+-		sdlindex = -1;
+-
+-	// update cvar containing count of XInput joysticks + SDL joysticks
+-	if (joy_detected.integer != sharedcount + numsdljoysticks)
+-		Cvar_SetValueQuick(&joy_detected, sharedcount + numsdljoysticks);
+-
+-	if (vid_sdljoystickindex != sdlindex)
++	int index = enable && joy_enable.integer > 0 ? joy_index.integer : -1;
++	int count = SDL_NumJoysticks();
++	if (joy_detected.integer != count)
++		Cvar_SetValueQuick(&joy_detected, count);
++
++	/* Instance IDs, unlike enumeration indices, survive reordering and
++	 * distinguish a reconnected controller from its previous connection. */
++	if (JoySDL_Select(&vid_sdljoy, index))
+ 	{
+-		vid_sdljoystickindex = sdlindex;
+-		// close SDL joystick if active
+-		if (vid_sdljoystick)
+-		{
+-			SDL_JoystickClose(vid_sdljoystick);
+-			vid_sdljoystick = NULL;
+-		}
+-		if (vid_sdlgamecontroller)
+-		{
+-			SDL_GameControllerClose(vid_sdlgamecontroller);
+-			vid_sdlgamecontroller = NULL;
+-		}
+-		if (sdlindex >= 0)
+-		{
+-			vid_sdljoystick = SDL_JoystickOpen(sdlindex);
+-			if (vid_sdljoystick)
+-			{
+-				const char *joystickname = SDL_JoystickName(vid_sdljoystick);
+-				if (SDL_IsGameController(vid_sdljoystickindex))
+-				{
+-					vid_sdlgamecontroller = SDL_GameControllerOpen(vid_sdljoystickindex);
+-					Con_DPrintf("Using SDL GameController mappings for Joystick %i\n", index);
+-				}
+-				Con_Printf("Joystick %i opened (SDL_Joystick %i is \"%s\" with %i axes, %i buttons, %i balls)\n", index, sdlindex, joystickname, (int)SDL_JoystickNumAxes(vid_sdljoystick), (int)SDL_JoystickNumButtons(vid_sdljoystick), (int)SDL_JoystickNumBalls(vid_sdljoystick));
+-			}
+-			else
+-			{
+-				Con_Printf(CON_ERROR "Joystick %i failed (SDL_JoystickOpen(%i) returned: %s)\n", index, sdlindex, SDL_GetError());
+-				sdlindex = -1;
+-			}
+-		}
++		VID_ReleaseJoyState();
++		if (vid_sdljoy.joystick)
++			Con_Printf("Joystick %i opened (SDL instance %i, %s, %s)\n", index,
++				(int)vid_sdljoy.instance, SDL_JoystickName(vid_sdljoy.joystick),
++				vid_sdljoy.controller ? "GameController / X360 keys" : "raw joystick / JOY keys");
++		else if (index >= 0 && index < count)
++			Con_DPrintf("Joystick %i failed: %s\n", index, SDL_GetError());
+ 	}
+-
+-	if (sdlindex >= 0)
+-		success = true;
+-
+-	if (joy_active.integer != (success ? 1 : 0))
+-		Cvar_SetValueQuick(&joy_active, success ? 1 : 0);
++	if (joy_active.integer != (vid_sdljoy.joystick != NULL))
++		Cvar_SetValueQuick(&joy_active, vid_sdljoy.joystick != NULL);
+ }
+ 
+ #ifdef WIN32
+diff --git a/vid_shared.c b/vid_shared.c
+index 29baba255b76b6aab7fdfcafb9cdef0104add6f2..7186a51110c50cd16f9920b21046a32bb3f16dcb 100644
+--- a/vid_shared.c
++++ b/vid_shared.c
+@@ -1054,6 +1054,16 @@ void VID_ApplyJoyState(vid_joystate_t *joystate)
+ 	vid_joystate = *joystate;
+ }
+ 
++void VID_ReleaseJoyState(void)
++{
++	vid_joystate_t released;
++	memset(&released, 0, sizeof(released));
++	/* Release using the old mapping, even when replacing a mapped device
++	 * with a raw joystick. This also resets the repeat timers. */
++	released.is360 = vid_joystate.is360;
++	VID_ApplyJoyState(&released);
++}
++
+ int VID_Shared_SetJoystick(int index)
+ {
+ #ifdef WIN32

@@ -19,6 +19,7 @@
 /wiki
 
 .idea/
+__pycache__/
 /result*
 /.serverbench_temp
 

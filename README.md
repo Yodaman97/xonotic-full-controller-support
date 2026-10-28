@@ -32,6 +32,8 @@ The community is primarily active in the [forums](https://forums.xonotic.org/) a
 
 ## Developing
 
+For this fork's Windows controller milestone, use the [build, backend design, and verification guide](Docs/controller-milestone-1.md). Run `python3 misc/tools/prepare-controller-deps.py` to obtain the locked engine/game-source revisions and apply the reviewed controller patches; use `--check` to verify them offline.
+
 To compile the latest revision from git, [follow this guide](https://gitlab.com/xonotic/xonotic/-/wikis/Repository_Access). Learn more about the [directory structure here](https://gitlab.com/xonotic/xonotic/-/wikis/Git). Check out [our project page on GitLab](https://gitlab.com/groups/xonotic) to see [development activity](https://gitlab.com/groups/xonotic/-/activity) and code ([xonotic-data.pk3dir](https://gitlab.com/xonotic/xonotic-data.pk3dir) is where most development takes place).
 
 Please ensure you've read and understood [CONTRIBUTING.md](CONTRIBUTING.md) before pushing commits or opening merge requests.

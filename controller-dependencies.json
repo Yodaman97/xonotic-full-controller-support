@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "path": "darkplaces",
+      "url": "https://gitlab.com/xonotic/darkplaces.git",
+      "revision": "d93f9c4292039354a2b8d40d11bc386891e55fe5",
+      "patch": "patches/darkplaces-controller-m1.patch",
+      "patch_sha256": "cc06a49596c3079064b6b0b062740b78ee9fe16e75f10272490bd9103374ab87"
+    },
+    {
+      "path": "data/xonotic-data.pk3dir",
+      "url": "https://gitlab.com/xonotic/xonotic-data.pk3dir.git",
+      "revision": "09a3a7253a7290222da648193814355566bdbb46",
+      "patch": "patches/xonotic-data-controller-m1.patch",
+      "patch_sha256": "ae96f281fd1a2da7de0423628a840c9ad8d8d1d5c1f73a3ddacaba2400bf873e"
+    },
+    {
+      "path": "gmqcc",
+      "url": "https://gitlab.com/xonotic/gmqcc.git",
+      "revision": "b2a319efb41069b9a250e76991dbe505ff8d030d"
+    }
+  ]
+}

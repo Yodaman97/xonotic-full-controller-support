@@ -240,3 +240,7 @@ xonotic-osx-sdl crlf=input
 *.zip -diff -crlf
 zipdiff crlf=input
 *.zym -diff -crlf
+
+# Locked patches contain intentional CRLF context from the Windows project.
+# Preserve their exact bytes so checkout/add cannot invalidate SHA-256 locks.
+patches/*.patch -text -crlf

@@ -273,7 +273,7 @@ To reproduce on an ordinary Ubuntu 24.04 Linux build machine (allow at least
 ```sh
 sudo apt-get install build-essential git cmake pkg-config python3 \
   gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
-  libglib2.0-dev libxml2-dev libminizip-dev libpng-dev libjpeg-dev libwebp-dev zlib1g-dev
+  libglib2.0-dev libxml2-dev libminizip-dev libpng-dev libjpeg-dev libwebp-dev libgl-dev zlib1g-dev
 python3 misc/tools/build-portable-windows.py --jobs 4
 python3 misc/tools/package-controller-windows.py \
   --verify build/Xonotic-Controller-Test-Windows-x64.zip

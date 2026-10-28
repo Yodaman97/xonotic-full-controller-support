@@ -27,11 +27,39 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y build-essential git cmake pkg-config \
             gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
-            libglib2.0-dev libxml2-dev libminizip-dev libpng-dev libjpeg-dev libwebp-dev zlib1g-dev
+            libglib2.0-dev libxml2-dev libminizip-dev libpng-dev libjpeg-dev libwebp-dev libgl-dev zlib1g-dev
       - name: Check tooling
         run: python3 -m unittest discover -s tests -p 'test_*.py'
       - name: Build engine, gamecode, runtime DLLs and playable map
-        run: python3 misc/tools/build-portable-windows.py --jobs 4
+        run: |
+          mkdir -p build
+          set +e
+          python3 misc/tools/build-portable-windows.py --jobs 4 2>&1 | tee build/portable-build.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            {
+              echo '### Portable build failure'
+              echo '```text'
+              tail -100 build/portable-build.log
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            python3 - <<'PY'
+          from pathlib import Path
+          lines = Path('build/portable-build.log').read_text(errors='replace').splitlines()
+          errors = [line for line in lines if any(word in line for word in ('CMake Error', 'fatal error:', 'error:', 'Error:', 'FileNotFoundError', 'ValueError:'))]
+          message = ' | '.join(errors[-3:]) or 'See the build failure summary for diagnostics.'
+          print('::error::' + message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A'))
+          PY
+          fi
+          exit "$result"
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portable-build-diagnostics
+          path: build/portable-build.log
+          if-no-files-found: ignore
       - name: Verify portable ZIP
         run: python3 misc/tools/package-controller-windows.py --verify build/Xonotic-Controller-Test-Windows-x64.zip
       - name: Upload downloadable test build

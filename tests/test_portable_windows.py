@@ -2,6 +2,9 @@
 import importlib.util
 from pathlib import Path
 import struct
+import subprocess
+import tempfile
+import tarfile
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "misc/tools/package-controller-windows.py"
@@ -47,6 +50,26 @@ class PortableTests(unittest.TestCase):
         self.assertTrue(package.is_system("api-ms-win-core-file-l1-1-0.dll"))
         self.assertFalse(package.is_system("sdl2.dll"))
         self.assertFalse(package.is_system("libvorbisfile.dll"))
+
+    def test_source_archive_ignores_unbuilt_optional_gitlink(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            repo = root / "repo"
+            repo.mkdir()
+            def git(*args):
+                return subprocess.check_output(["git", "-C", str(repo), *args])
+            git("init", "-q")
+            git("config", "user.name", "Source archive test")
+            git("config", "user.email", "test@example.invalid")
+            (repo / "LICENSE").write_text("Fixture license\n")
+            git("add", "LICENSE")
+            git("commit", "-qm", "source")
+            commit = git("rev-parse", "HEAD").decode().strip()
+            git("update-index", "--add", "--cacheinfo", f"160000,{commit},optional")
+            output = root / "source.tar.gz"
+            package.source_archive(output, [("library", repo)])
+            with tarfile.open(output) as tar:
+                self.assertEqual(tar.getnames(), ["library/LICENSE"])
 
 
 if __name__ == "__main__":

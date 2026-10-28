@@ -11,6 +11,9 @@ on:
       - 'patches/**'
 permissions:
   contents: read
+concurrency:
+  group: portable-windows-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   package:
     runs-on: ubuntu-24.04

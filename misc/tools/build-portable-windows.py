@@ -93,7 +93,7 @@ set(CMAKE_FIND_ROOT_PATH_MODE_PACKAGE ONLY)
         "png": ["-DPNG_TESTS=OFF", "-DPNG_TOOLS=OFF", "-DPNG_STATIC=OFF"],
         "jpeg": ["-DENABLE_STATIC=OFF", "-DWITH_TURBOJPEG=OFF", "-DWITH_SIMD=OFF"],
         "ogg": ["-DINSTALL_DOCS=OFF"], "vorbis": [],
-        "freetype": ["-DFT_DISABLE_BZIP2=ON", "-DFT_DISABLE_PNG=ON", "-DFT_DISABLE_HARFBUZZ=ON", "-DFT_DISABLE_BROTLI=ON"],
+        "freetype": ["-DFT_DISABLE_BZIP2=ON", "-DFT_DISABLE_PNG=ON", "-DFT_DISABLE_HARFBUZZ=ON", "-DFT_DISABLE_BROTLI=ON", "-DFT_ENABLE_LOGGING=OFF"],
     }
     cross_env = os.environ.copy()
     cross_env.pop("PKG_CONFIG_SYSROOT_DIR", None)

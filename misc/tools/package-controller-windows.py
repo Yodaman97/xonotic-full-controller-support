@@ -60,7 +60,15 @@ def git(path, *args):
 
 
 def tracked(path):
-    return [p.decode() for p in git(path, "ls-files", "-z").split(b"\0") if p]
+    # Gitlinks are optional source dependencies, not files. FreeType's unused
+    # logging submodule is intentionally absent in this build configuration.
+    result = []
+    for entry in git(path, "ls-files", "--stage", "-z").split(b"\0"):
+        if entry:
+            metadata, name = entry.split(b"\t", 1)
+            if not metadata.startswith(b"160000 "):
+                result.append(name.decode())
+    return result
 
 
 def digest(data):
@@ -196,6 +204,14 @@ def package(args):
         stage = Path(temporary) / FOLDER
         (stage / "data").mkdir(parents=True)
         (stage / "Source").mkdir()
+        repos = [("project", ROOT), ("engine", ROOT / "darkplaces"), ("game", game), ("gmqcc", ROOT / "gmqcc")]
+        if args.runtime_sources:
+            for repo in sorted(args.runtime_sources.iterdir()):
+                if repo.name not in ("maps", "netradiant") and (repo / ".git").exists():
+                    repos.append((repo.name, repo))
+        if args.sdl_license:
+            shutil.copy2(args.sdl_license, stage / "LICENSE-SDL.txt")
+        source_archive(stage / "Source/corresponding-source.tar.gz", repos)
         shutil.copy2(args.engine, stage / "darkplaces-sdl.exe")
         for directory in args.dll_dir:
             for dll in directory.glob("*.dll"):
@@ -227,14 +243,6 @@ def package(args):
         for name in ("COPYING", "GPL-2", "GPL-3", "key_0.d0pk", "key_1.d0pk"):
             shutil.copy2(ROOT / name, stage / name)
         shutil.copy2(ROOT / "Docs/controller-milestone-1.md", stage / "controller-milestone-1.md")
-        repos = [("project", ROOT), ("engine", ROOT / "darkplaces"), ("game", game), ("gmqcc", ROOT / "gmqcc")]
-        if args.runtime_sources:
-            for repo in sorted(args.runtime_sources.iterdir()):
-                if repo.name not in ("maps", "netradiant") and (repo / ".git").exists():
-                    repos.append((repo.name, repo))
-        if args.sdl_license:
-            shutil.copy2(args.sdl_license, stage / "LICENSE-SDL.txt")
-        source_archive(stage / "Source/corresponding-source.tar.gz", repos)
         for name in ("controller-dependencies.json", "portable-dependencies.json"):
             shutil.copy2(ROOT / name, stage / "Source" / name)
         (stage / "THIRD-PARTY-NOTICES.txt").write_text(

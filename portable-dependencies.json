@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "sdl": {
+    "url": "https://github.com/libsdl-org/SDL/releases/download/release-2.32.10/SDL2-devel-2.32.10-mingw.tar.gz",
+    "sha256": "83a5d74012311edc3c0d40ea6faecbe57ad692aa033fa5dc273cc937e3938ff2"
+  },
+  "sources": [
+    {
+      "name": "zlib",
+      "url": "https://github.com/madler/zlib.git",
+      "ref": "v1.3.1",
+      "revision": "51b7f2abdade71cd9bb0e7a373ef2610ec6f9daf"
+    },
+    {
+      "name": "png",
+      "url": "https://github.com/pnggroup/libpng.git",
+      "ref": "v1.6.47",
+      "revision": "872555f4ba910252783af1507f9e7fe1653be252"
+    },
+    {
+      "name": "jpeg",
+      "url": "https://github.com/libjpeg-turbo/libjpeg-turbo.git",
+      "ref": "3.1.0",
+      "revision": "20ade4dea9589515a69793e447a6c6220b464535"
+    },
+    {
+      "name": "ogg",
+      "url": "https://github.com/xiph/ogg.git",
+      "ref": "v1.3.5",
+      "revision": "e1774cd77f471443541596e09078e78fdc342e4f"
+    },
+    {
+      "name": "vorbis",
+      "url": "https://github.com/xiph/vorbis.git",
+      "ref": "v1.3.7",
+      "revision": "0657aee69dec8508a0011f47f3b69d7538e9d262"
+    },
+    {
+      "name": "freetype",
+      "url": "https://github.com/freetype/freetype.git",
+      "ref": "VER-2-13-3",
+      "revision": "42608f77f20749dd6ddc9e0536788eaad70ea4b5"
+    },
+    {
+      "name": "netradiant",
+      "url": "https://gitlab.com/xonotic/netradiant.git",
+      "ref": "master",
+      "revision": "c00084bc741a16438e9257dc5a64da989085532f"
+    },
+    {
+      "name": "maps",
+      "url": "https://gitlab.com/xonotic/xonotic-maps.pk3dir.git",
+      "ref": "master",
+      "revision": "a7e7fe7a5022d13d806560b88d57b70d6af99fd6"
+    }
+  ]
+}

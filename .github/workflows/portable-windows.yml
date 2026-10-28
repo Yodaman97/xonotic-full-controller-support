@@ -1,0 +1,41 @@
+name: Portable Windows controller test
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/windows-controller-m1]
+    paths:
+      - '.github/workflows/portable-windows.yml'
+      - 'misc/tools/*portable*'
+      - 'misc/tools/package-controller-windows.py'
+      - '*dependencies.json'
+      - 'patches/**'
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free space on the disposable build runner
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential git cmake pkg-config \
+            gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
+            libglib2.0-dev libxml2-dev libminizip-dev libpng-dev libjpeg-dev libwebp-dev zlib1g-dev
+      - name: Check tooling
+        run: python3 -m unittest discover -s tests -p 'test_*.py'
+      - name: Build engine, gamecode, runtime DLLs and playable map
+        run: python3 misc/tools/build-portable-windows.py --jobs 4
+      - name: Verify portable ZIP
+        run: python3 misc/tools/package-controller-windows.py --verify build/Xonotic-Controller-Test-Windows-x64.zip
+      - name: Upload downloadable test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Xonotic-Controller-Test-Windows-x64
+          path: build/Xonotic-Controller-Test-Windows-x64.zip
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 30

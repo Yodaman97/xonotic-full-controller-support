@@ -234,3 +234,61 @@ pass. Mark unexecuted rows **NOT RUN** rather than passed.
 - Windows USB/Bluetooth, actual game window behavior, and Steam-absent physical
   checks: **NOT RUN in this Linux cloud environment**.
 - Full menu support, rumble, aim assist, and glyphs remain outside this milestone.
+
+## Portable Windows test ZIP
+
+`Xonotic-Controller-Test-Windows-x64.zip` is built by
+`.github/workflows/portable-windows.yml`. On the feature branch, open the
+**Portable Windows controller test** workflow in GitHub Actions, run it, and
+download the **Xonotic-Controller-Test-Windows-x64** artifact from the completed
+run. The artifact contains the named test ZIP. The workflow also runs on pushes
+that change packaging inputs. It uploads a test artifact for 30 days; it does
+not merge, publish an environment, or create an official release.
+
+Extract the complete test ZIP into a writable folder, connect an Xbox
+controller, close Steam/external mappers, and double-click `Play-Xonotic.bat`.
+The launcher anchors paths to its own directory and creates a fresh
+`profiles/controller-test-*` profile on every launch. It starts **Final Rage
+deathmatch with three bots**, without a public master-server advertisement.
+Your regular Xonotic settings are not read or overwritten. Keyboard/mouse can
+still be used, including menus. Logs/settings remain in that launch's profile.
+
+Contents include the modified x64 SDL engine, freshly compiled `progs.dat`,
+`csprogs.dat`, and `menu.dat`, upstream game assets, fonts, a compiled Final Rage
+map and map assets, Windows SDL/zlib/PNG/JPEG/FreeType/Ogg/Vorbis DLLs, licensing,
+source snapshots, dependency locks, and per-file SHA-256 hashes. Runtime DLLs
+are built from locked upstream sources, except SDL2, which uses its official
+checksum-verified MinGW SDK. Compatibility aliases preserve the DLL filenames
+the engine and import tables expect. The Vorbis patch supplies missing LIBRARY
+names in upstream `.def` files for GNU binutils; it changes no audio algorithms.
+
+No development tools or administrator installation are required on the test PC.
+Optional online download/crypto and module-music libraries are not included;
+this package targets offline controller testing. Physical Windows controller
+acceptance checks above remain mandatory even when packaging verification passes.
+
+To reproduce on an ordinary Ubuntu 24.04 Linux build machine (allow at least
+20 GB free disk space and the upstream downloads):
+
+```sh
+sudo apt-get install build-essential git cmake pkg-config python3 \
+  gcc-mingw-w64-x86-64-posix g++-mingw-w64-x86-64-posix \
+  libglib2.0-dev libxml2-dev libminizip-dev libpng-dev libjpeg-dev libwebp-dev zlib1g-dev
+python3 misc/tools/build-portable-windows.py --jobs 4
+python3 misc/tools/package-controller-windows.py \
+  --verify build/Xonotic-Controller-Test-Windows-x64.zip
+```
+
+`portable-dependencies.json` pins map assets, NetRadiant/q3map2, runtime sources,
+and the SDL2 SDK checksum. The builder uses the milestone's existing locked
+engine/game/compiler, builds both engine and all three game programs, compiles
+the official map source with BSP/visibility/lighting passes, packages the game,
+and verifies archive CRCs, SHA-256 hashes, x64 PE headers, imported DLL closure,
+dynamically loaded runtime filenames, launcher paths/profile isolation, game
+programs, assets, and deathmatch spawn entities. The game/map PK3s are ordinary
+ZIPs and retain upstream asset sources and attribution. Code/runtime source
+snapshots are in `Source/corresponding-source.tar.gz`.
+
+The Linux cloud build cannot execute a native Windows GUI session or certify
+controller hardware. GitHub Actions artifact availability is established only
+after a completed run; a pushed workflow alone is not a published ZIP.
